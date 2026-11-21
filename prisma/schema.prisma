@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  SOCIETY_ADMIN
+  RESIDENT
+}
+
+enum VehicleType {
+  TWO_WHEELER
+  FOUR_WHEELER
+  BOTH
+}
+
+enum BookingStatus {
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model Society {
+  id         String        @id @default(cuid())
+  name       String
+  slug       String        @unique
+  city       String
+  address    String?
+  inviteCode String        @unique
+  isActive   Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  towers   Tower[]
+  users    User[]
+  slots    ParkingSlot[]
+  bookings Booking[]
+
+  @@index([inviteCode])
+}
+
+model Tower {
+  id        String   @id @default(cuid())
+  societyId String
+  name      String
+  levels    String   @default("B1,B2,Stilt")
+  createdAt DateTime @default(now())
+
+  society Society       @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  slots   ParkingSlot[]
+
+  @@unique([societyId, name])
+  @@index([societyId])
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  email                String    @unique
+  name                 String?
+  phone                String?
+  flatNumber           String?
+  towerName            String?
+  role                 UserRole  @default(RESIDENT)
+  societyId            String?
+  isActive             Boolean   @default(true)
+  disclaimerAcceptedAt DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  society  Society?      @relation(fields: [societyId], references: [id], onDelete: SetNull)
+  slots    ParkingSlot[]
+  bookings Booking[]     @relation("RenterBookings")
+
+  @@index([societyId])
+  @@index([email])
+}
+
+model OtpToken {
+  id        String    @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
+model ParkingSlot {
+  id             String      @id @default(cuid())
+  societyId      String
+  ownerId        String
+  towerId        String?
+  towerName      String
+  level          String
+  slotNumber     String
+  vehicleType    VehicleType @default(FOUR_WHEELER)
+  hourlyRate     Int
+  dailyRate      Int
+  notes          String?
+  upiId          String?
+  isAvailable    Boolean     @default(true)
+  isActive       Boolean     @default(true)
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  society  Society   @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tower    Tower?    @relation(fields: [towerId], references: [id], onDelete: SetNull)
+  bookings Booking[]
+
+  @@index([societyId, isAvailable, isActive])
+  @@index([ownerId])
+}
+
+model Booking {
+  id                 String        @id @default(cuid())
+  societyId          String
+  slotId             String
+  renterId           String
+  vehicleNumber      String
+  vehicleType        VehicleType   @default(FOUR_WHEELER)
+  startTime          DateTime
+  endTime            DateTime
+  estimatedAmount    Int
+  pricingBreakdown   String
+  status             BookingStatus @default(CONFIRMED)
+  disclaimerAccepted Boolean       @default(true)
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  society Society     @relation(fields: [societyId], references: [id], onDelete: Cascade)
+  slot    ParkingSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  renter  User        @relation("RenterBookings", fields: [renterId], references: [id], onDelete: Cascade)
+
+  @@index([societyId, status])
+  @@index([slotId, startTime, endTime])
+  @@index([renterId])
+}
